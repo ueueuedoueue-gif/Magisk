@@ -5,6 +5,7 @@ import android.Manifest.permission.REQUEST_INSTALL_PACKAGES
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.MenuItem
 import android.view.View
@@ -37,6 +38,7 @@ import com.topjohnwu.magisk.ui.theme.Theme
 import com.topjohnwu.magisk.view.MagiskDialog
 import com.topjohnwu.magisk.view.Shortcuts
 import kotlinx.coroutines.launch
+import rikka.shizuku.Shizuku
 import java.io.File
 import com.topjohnwu.magisk.core.R as CoreR
 
@@ -64,11 +66,24 @@ class MainActivity : NavigationActivity<ActivityMainMd2Binding>(), SplashScreenH
         }
 
     private var isRootFragment = true
+    private val SHIZUKU_REQUEST_CODE = 1001
+
+    private val shizukuPermissionListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
+        if (requestCode == SHIZUKU_REQUEST_CODE) {
+            if (grantResult == PackageManager.PERMISSION_GRANTED) {
+                // Permissão do Shizuku concedida com sucesso
+            } else {
+                // Permissão do Shizuku negada pelo usuário
+                toast("Permissão do Shizuku negada.", Toast.LENGTH_SHORT)
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         setTheme(Theme.selected.themeRes)
         splashController.preOnCreate()
         super.onCreate(savedInstanceState)
+        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener)
         splashController.onCreate(savedInstanceState)
     }
 
@@ -77,11 +92,19 @@ class MainActivity : NavigationActivity<ActivityMainMd2Binding>(), SplashScreenH
         splashController.onResume()
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener)
+    }
+
     @SuppressLint("InlinedApi")
     override fun onCreateUi(savedInstanceState: Bundle?) {
         setContentView()
         showUnsupportedMessage()
         askForHomeShortcut()
+
+        // Solicitar permissão do Shizuku caso ele esteja rodando
+        checkAndRequestShizuku()
 
         // Ask permission to post notifications for background update check
         if (Config.checkUpdate) {
@@ -135,6 +158,21 @@ class MainActivity : NavigationActivity<ActivityMainMd2Binding>(), SplashScreenH
 
         if (!isRootFragment) {
             requestNavigationHidden(requiresAnimation = savedInstanceState == null)
+        }
+    }
+
+    private fun checkAndRequestShizuku() {
+        try {
+            // Verifica se o Shizuku está instalado e rodando
+            if (Shizuku.pingBinder()) {
+                // Verifica se já temos permissão
+                if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+                    // Solicita permissão
+                    Shizuku.requestPermission(SHIZUKU_REQUEST_CODE)
+                }
+            }
+        } catch (e: Exception) {
+            // Shizuku não está instalado, API inacessível ou não está em execução
         }
     }
 
